@@ -6,7 +6,11 @@ require 'open-uri'
 
 module RealWeb
   class Server
-    DEFAULT_PORT_RANGE = 8000..10000
+    attr_reader :host, :rack_server
+
+    DEFAULT_PORT_RANGE    = 8000..10000
+    DEFAULT_HOST          = '127.0.0.1'
+    DEFAULT_LOGGER        = Logger.new(StringIO.new)
 
     def self.with_rackup(*args)
       new(*args) do |server|
@@ -16,9 +20,18 @@ module RealWeb
       end
     end
 
-    def initialize(config_ru, pre_spawn_callback = nil, port_range = DEFAULT_PORT_RANGE)
-      @config_ru, @pre_spawn_callback, @port_range = config_ru, pre_spawn_callback, port_range
-      @running = false
+    def initialize(config_ru, options = {})
+      @config_ru  = config_ru
+      @running    = false
+
+      @port_range = options.delete(:port_range) || DEFAULT_PORT_RANGE
+      @logger     = options.delete(:logger)     || DEFAULT_LOGGER
+      @host       = options.delete(:host)       || DEFAULT_HOST
+
+      @pre_spawn_callback = options.delete(:pre_spawn_callback)
+
+      @rack_options = options
+
       yield self if block_given?
     end
 
@@ -32,20 +45,14 @@ module RealWeb
 
     def start
       return if running?
-      port
       run_pre_spawn
       spawn_server
-      at_exit { stop }
       wait_for_server
       @running = true
     end
 
     def stop
       @running = false
-    end
-
-    def host
-      "127.0.0.1"
     end
 
     def base_uri
@@ -73,25 +80,14 @@ module RealWeb
       raise "Not implemented"
     end
 
-    # hack around Rack::Server not yielding the real server
-    def boot_rack_server(&block)
-      begin
-        rack_server = Rack::Server.new(
-          :Port      => port,
-          :config    => @config_ru,
-          :server    => 'webrick',
-          :Logger    => Logger.new(StringIO.new), # quiet webrick
-          :AccessLog => [ StringIO.new, WEBrick::AccessLog::COMMON_LOG_FORMAT ]
-        )
-        webrick_handler = rack_server.server
-        wrapped_app = rack_server.send(:wrapped_app)
-        webrick_handler.run(wrapped_app, rack_server.options, &block)
-      rescue
-        $stderr.puts "Failed to start server"
-        $stderr.puts $!.inspect
-        $stderr.puts $!.backtrace
-        abort
-      end
+    def rack_server
+      Rack::Server.new(@rack_options.merge(
+        :Port       => port,
+        :Host       => host,
+        :config     => @config_ru,
+        :Logger     => @logger,
+        :AccessLog  => @access_log
+      ))
     end
 
     def wait_for_server

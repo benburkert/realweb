@@ -4,18 +4,17 @@ module RealWeb
   class ThreadServer < Server
 
     def stop
-      @thread[:kill_server].call
-      @thread.kill
+      @thread.kill if @thread
       super
     end
 
     protected
 
     def spawn_server
+      return if @thread && @thread.alive?
+
       @thread ||= Thread.new do
-        boot_rack_server do |webrick_server|
-          Thread.current[:kill_server] = lambda { webrick_server.shutdown }
-        end
+        rack_server.start
       end
     end
   end
