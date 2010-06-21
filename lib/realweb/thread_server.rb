@@ -1,5 +1,3 @@
-require 'realweb/server'
-
 module RealWeb
   class ThreadServer < Server
 

@@ -1,5 +1,3 @@
-require 'realweb/server'
-
 module RealWeb
   class ForkingServer < Server
 
@@ -22,26 +20,16 @@ module RealWeb
     end
 
     def spawn_server
-      @reader, @writer = IO.pipe
+      self.port
 
-      if @pid = fork
-        process_as_parent
-      else
+      unless @pid = fork
         process_as_child
       end
     end
 
-    def process_as_parent
-      @writer.close
-      @host, @port = @reader.read.split(':')
-    end
-
     def process_as_child
       trap(:TERM) { exit!(0) }
-      @reader.close
       @server = rack_server
-      @writer << "#{@server.options[:Host]}:#{@server.options[:Port]}"
-      @writer.close
       @server.start
     end
   end

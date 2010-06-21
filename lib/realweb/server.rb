@@ -1,9 +1,3 @@
-require 'rack'
-require 'webrick'
-require 'stringio'
-require 'logger'
-require 'open-uri'
-
 module RealWeb
   class Server
     attr_reader :host, :rack_server
